@@ -14,7 +14,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = os.getenv("GUILD_ID")
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
 WEBSITE_URL = os.getenv("WEBSITE_URL", "https://faceit-settings.com")
-LOG_SERVER_PORT = int(os.getenv("LOG_SERVER_PORT", "8888"))
+LOG_SERVER_PORT = int(os.getenv("LOG_SERVER_PORT", "9999"))
 
 # ID канала для команд верификации
 ALLOWED_CHANNEL_ID = int(os.getenv("ALLOWED_CHANNEL_ID", "0"))
