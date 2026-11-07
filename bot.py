@@ -455,11 +455,10 @@ class LanguageView(ui.LayoutView):
         super().__init__(timeout=None)  # постоянное меню, работает и после перезапуска бота
         self.add_item(
             ui.Container(
-                header(),
+                ui.TextDisplay("![Banner](attachment://banner.webp)"),  # Картинка через markdown
                 ui.Separator(),
                 ui.TextDisplay("### 🌐 Please select your language"),
                 LanguageRow(game),
-                accent_colour=FACEIT_ORANGE,
             )
         )
 
