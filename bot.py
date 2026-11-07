@@ -333,7 +333,7 @@ def ratka_image_file() -> discord.File:
 def header() -> ui.Section:
     """Заголовок с баннером GO VERIFY YOUR ACCOUNT."""
     return ui.Section(
-        ui.Image("attachment://banner.webp"),
+        accessory=ui.Thumbnail("attachment://banner.webp"),
     )
 
 
