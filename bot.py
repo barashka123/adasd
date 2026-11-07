@@ -456,7 +456,7 @@ class LanguageView(ui.LayoutView):
         self.add_item(
             ui.Container(
                 ui.MediaGallery(
-                    ui.MediaGalleryItem(url="attachment://banner.webp")
+                    discord.MediaGalleryItem(media="attachment://banner.webp")
                 ),
                 ui.Separator(divider=True, spacing=ui.SeparatorSpacingSize.small),
                 LanguageRow(game),
