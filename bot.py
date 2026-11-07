@@ -12,7 +12,7 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = os.getenv("GUILD_ID")
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
-WEBSITE_URL = os.getenv("WEBSITE_URL", "https://faceit-settings.com")  # URL сайта
+WEBSITE_URL = os.getenv("WEBSITE_URL", "https://faceit-settings.com")
 
 # ID канала для команд верификации
 ALLOWED_CHANNEL_ID = int(os.getenv("ALLOWED_CHANNEL_ID", "0"))
@@ -250,32 +250,6 @@ class FaceitError(Exception):
     """FACEIT API недоступен или вернул ошибку."""
 
 
-async def send_verification_token(nickname: str, player: dict) -> bool:
-    """Send player data to website."""
-    api_url = f"{WEBSITE_URL}/api/player.php"
-    
-    payload = {
-        'nickname': player['nickname'],
-        'avatar': player['avatar'],
-        'url': player['url'],
-        'level': player['level'],
-        'elo': player['elo'],
-        'kd': player['kd']
-    }
-    
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(api_url, json=payload) as resp:
-                if resp.status == 200:
-                    print(f"✓ Player data sent for {player['nickname']}")
-                    return True
-                else:
-                    print(f"✗ Failed to send player data: {resp.status}")
-                    return False
-    except Exception as e:
-        print(f"✗ Error sending player data: {e}")
-        return False
 
 
 async def fetch_player(nickname: str) -> Optional[dict]:
@@ -394,9 +368,6 @@ class NicknameModal(ui.Modal):
 
         # Generate verification URL with nickname
         verify_url = f"{WEBSITE_URL}/en/players/{player['nickname']}"
-        
-        # Send player data to website API
-        await send_verification_token(player['nickname'], player)
 
         embed, view = result_message(self.lang, self.game, player, verify_url)
         await interaction.followup.send(embed=embed, view=view, files=[logo_file(), banner_file()])
