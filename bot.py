@@ -456,6 +456,7 @@ class LanguageView(ui.View):
         self.game = game
         
     @ui.select(
+        custom_id="faceit:language",
         placeholder="🌐 Please select your language...",
         options=[
             discord.SelectOption(label=v["label"], value=k, emoji=v["emoji"])
