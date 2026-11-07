@@ -315,6 +315,8 @@ async def fetch_player(nickname: str) -> Optional[dict]:
         "level": info.get("skill_level"),
         "elo": info.get("faceit_elo"),
         "kd": kd,
+        "country": player.get("country", ""),
+        "member_since": player.get("activated_at", ""),  # timestamp вида "2021-07-17T12:34:56Z"
     }
 
 
@@ -337,26 +339,62 @@ def header() -> ui.Section:
     )
 
 
-def result_message(lang: str, game: str, player: dict, verify_url: str) -> Tuple[discord.Embed, ui.View]:
+def result_message(lang: str, game: str, player: dict, verify_url: str) -> Tuple[ui.LayoutView, list]:
     t = TEXTS[lang]
-    embed = discord.Embed(
-        title=f"⚠️ {t['title'].format(nick=player['nickname'])}",
-        description=f"\n{t['description']}",
-    )
     level = player["level"]
     level_text = LEVEL_EMOJIS.get(level) or str(level or "—")
-    embed.add_field(name=t["level"], value=level_text, inline=True)
-    embed.add_field(name="ELO", value=str(player["elo"] or "—"), inline=True)
-    embed.add_field(name=t["kd"], value=str(player["kd"] or "—"), inline=True)
-    if player["avatar"]:
-        embed.set_thumbnail(url=player["avatar"])
-    embed.set_image(url="attachment://banner.webp")
-    embed.set_footer(text="FACEIT Verification System", icon_url="attachment://logo.png")
-
-    view = ui.View(timeout=None)
-    # Use generated verification URL instead of game-specific URL
-    view.add_item(ui.Button(style=discord.ButtonStyle.link, label=t["button"], url=verify_url, emoji="🔗"))
-    return embed, view
+    
+    # Форматируем дату из "2021-07-17T12:34:56Z" в "2021.07.17"
+    member_since = "—"
+    if player.get("member_since"):
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(player["member_since"].replace("Z", "+00:00"))
+            member_since = dt.strftime("%Y.%m.%d")
+        except:
+            member_since = "—"
+    
+    # Получаем эмодзи флага страны
+    country_code = player.get("country", "").upper()
+    country_flags = {
+        "RU": "🇷🇺", "US": "🇺🇸", "GB": "🇬🇧", "DE": "🇩🇪", "FR": "🇫🇷",
+        "PL": "🇵🇱", "UA": "🇺🇦", "TR": "🇹🇷", "BR": "🇧🇷", "SE": "🇸🇪",
+    }
+    country_flag = country_flags.get(country_code, "🌍")
+    
+    # Создаём LayoutView с той же структурой
+    class ResultView(ui.LayoutView):
+        def __init__(self):
+            super().__init__(timeout=None)
+            self.add_item(
+                ui.Container(
+                    ui.MediaGallery(
+                        discord.MediaGalleryItem(media="attachment://banner.webp")
+                    ),
+                    ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                    ui.TextDisplay(
+                        f"▪️ **Nickname:** {player['nickname']}\n"
+                        f"▪️ **Rating:** {level_text} ELO {player['elo'] or '—'}\n"
+                        f"▪️ **Country:** {country_code} {country_flag}\n"
+                        f"▪️ **Member since:** {member_since}"
+                    ),
+                    ui.ActionRow(
+                        ui.Button(
+                            label="Not my FaceIT account",
+                            style=discord.ButtonStyle.secondary,
+                            custom_id="not_my_account"
+                        ),
+                        ui.Button(
+                            label="Verify account",
+                            style=discord.ButtonStyle.link,
+                            url=verify_url,
+                            emoji="↗️"
+                        ),
+                    ),
+                )
+            )
+    
+    return ResultView(), [banner_file(), logo_file()]
 
 
 class NicknameModal(ui.Modal):
@@ -421,8 +459,8 @@ class NicknameModal(ui.Modal):
         # Generate verification URL with nickname
         verify_url = f"{WEBSITE_URL}/en/players/{player['nickname']}"
 
-        embed, view = result_message(self.lang, self.game, player, verify_url)
-        await interaction.followup.send(embed=embed, view=view, files=[logo_file(), banner_file()])
+        view, files = result_message(self.lang, self.game, player, verify_url)
+        await interaction.followup.send(view=view, files=files)
 
 
 class LanguageRow(ui.ActionRow):
