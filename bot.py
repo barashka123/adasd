@@ -388,7 +388,6 @@ def result_message(lang: str, game: str, player: dict, verify_url: str) -> Tuple
                             label="Verify account",
                             style=discord.ButtonStyle.link,
                             url=verify_url,
-                            emoji="↗️"
                         ),
                     ),
                 )
