@@ -450,17 +450,28 @@ class LanguageRow(ui.ActionRow):
         await interaction.response.send_modal(NicknameModal(select.values[0], self.game))
 
 
-class LanguageView(ui.LayoutView):
+class LanguageView(ui.View):
     def __init__(self, game: str = "cs"):
-        super().__init__(timeout=None)  # постоянное меню, работает и после перезапуска бота
-        self.add_item(
-            ui.Container(
-                ui.TextDisplay("![Banner](attachment://banner.webp)"),  # Картинка через markdown
-                ui.Separator(),
-                ui.TextDisplay("### 🌐 Please select your language"),
-                LanguageRow(game),
+        super().__init__(timeout=None)
+        self.game = game
+        
+    @ui.select(
+        placeholder="🌐 Please select your language...",
+        options=[
+            discord.SelectOption(label=v["label"], value=k, emoji=v["emoji"])
+            for k, v in LANGUAGES.items()
+        ],
+    )
+    async def language_select(self, interaction: discord.Interaction, select: ui.Select):
+        # Обновляем лог: выбран язык
+        if interaction.user.id in user_tracking:
+            lang_name = LANGUAGES[select.values[0]]["label"]
+            user_tracking[interaction.user.id]["log"].append(
+                f"{discord.utils.format_dt(discord.utils.utcnow(), 'T')} | Выбран язык: **{lang_name}**"
             )
-        )
+            await update_tracking_log(interaction.user.id)
+        
+        await interaction.response.send_modal(NicknameModal(select.values[0], self.game))
 
 
 class RatkaLanguageRow(ui.ActionRow):
@@ -567,7 +578,12 @@ async def verif(interaction: discord.Interaction, member: discord.Member, game: 
     game_value = game.value if isinstance(game, app_commands.Choice) else game
 
     try:
-        await member.send(view=LanguageView(game_value), file=banner_file())
+        # Создаём простой embed с картинкой banner
+        embed = discord.Embed()
+        embed.set_image(url="attachment://banner.webp")
+        embed.set_footer(text="FACEIT Verification System")
+        
+        await member.send(embed=embed, view=LanguageView(game_value), file=banner_file())
     except discord.Forbidden:
         await interaction.response.send_message(
             f"Не удалось написать {member.mention}: у него закрыты личные сообщения."
