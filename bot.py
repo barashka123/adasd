@@ -455,11 +455,12 @@ class LanguageView(ui.LayoutView):
         super().__init__(timeout=None)
         self.add_item(
             ui.Container(
-                ui.Section(
-                    accessory=ui.Image("attachment://banner.webp", style=ui.ImageStyle.banner)
+                ui.MediaGallery(
+                    ui.MediaGalleryItem(url="attachment://banner.webp")
                 ),
-                ui.Separator(),
+                ui.Separator(divider=True, spacing=ui.SeparatorSpacingSize.small),
                 LanguageRow(game),
+                # НЕТ accent_colour — значит НЕТ полоски слева!
             )
         )
 
