@@ -458,7 +458,7 @@ class LanguageView(ui.LayoutView):
                 ui.MediaGallery(
                     discord.MediaGalleryItem(media="attachment://banner.webp")
                 ),
-                ui.Separator(divider=True, spacing=ui.SeparatorSpacingSize.small),
+                ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 LanguageRow(game),
                 # НЕТ accent_colour — значит НЕТ полоски слева!
             )
